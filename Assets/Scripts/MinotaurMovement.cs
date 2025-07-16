@@ -5,15 +5,47 @@ public class MinotaurMovement : MonoBehaviour
 {
     [SerializeField] private Rigidbody2D rb;
     [SerializeField] private float jumpForce, goDownForce, standingColliderSize, crouchingColliderSize;
+    [SerializeField] private float minYPos;
+
+    public float currentSpeed, thrustingSpeed, normalSpeed, thrustingAcceleration;
+
+    private bool thrusting = false;
 
     [SerializeField] private BoxCollider2D minotaurCollider;
 
     private bool goingDown = false, grounded = true;
 
+
+    public static MinotaurMovement singleton;
+
+    private void Awake()
+    {
+        if (singleton != null && singleton != this)
+        {
+            Destroy(gameObject);
+
+            return;
+        }
+
+        singleton = this;
+    }
+
     private void Update()
     {
+        if(transform.position.y < minYPos)
+        {
+            transform.position = new Vector3(transform.position.x, minYPos, transform.position.z);
+        }
+
+        if (transform.position.y <= minYPos)
+        {
+            grounded = true;
+        }
+
         if (grounded)
         {
+            Thrust();
+
             Crouch();
         }
     }
@@ -36,6 +68,18 @@ public class MinotaurMovement : MonoBehaviour
         rb.AddForce(Vector2.down * goDownForce, ForceMode2D.Force);
     }
 
+    private void Thrust()
+    {
+        if (thrusting)
+        {
+            Mathf.MoveTowards(currentSpeed, thrustingSpeed, thrustingAcceleration);
+        }
+        else
+        {
+            Mathf.MoveTowards(currentSpeed, normalSpeed, thrustingAcceleration);
+        }
+    }
+
     private void Crouch()
     {
         if (goingDown)
@@ -55,7 +99,7 @@ public class MinotaurMovement : MonoBehaviour
 
     public void JumpInput(InputAction.CallbackContext ctx)
     {
-        if (ctx.started)
+        if (ctx.started && grounded)
         {
             Jump();
         }
@@ -74,10 +118,28 @@ public class MinotaurMovement : MonoBehaviour
         }
     }
 
+    public void ThrustInput(InputAction.CallbackContext ctx)
+    {
+        if (ctx.started)
+        {
+            thrusting = true;
+        }
+
+        if (ctx.canceled)
+        {
+            thrusting = false;
+        }
+    }
+
     #endregion
 
     private void OnTriggerEnter2D(Collider2D collision)
     {
+        if (collision.CompareTag("Obstacle"))
+        {
+            //die
+        }
+
         if (collision.CompareTag("WeakGround"))
         {
             //go underground

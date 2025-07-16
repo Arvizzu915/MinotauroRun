@@ -1,62 +1,58 @@
+using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.InputSystem;
+using UnityEngine.Pool; // Required for ObjectPool<T>
 
-public class ObstaclesManager : MonoBehaviour
+public class ObstaclePoolManager : MonoBehaviour
 {
-    [SerializeField] private GameObject[] obstaclesList, currentObstacles;
+    public static ObstaclePoolManager Instance;
 
-    [SerializeField] private float currentSpeed, thrustingSpeed, normalSpeed, thrustingAcceleration;
+    [SerializeField] public GameObject[] obstaclePrefabs;
+    [SerializeField] private int poolSize = 10;
 
-    [SerializeField] private float spawnTimer, blockLifetime;
-    private float lastSpawned = 0;
+    private Dictionary<string, ObjectPool<GameObject>> poolDict = new();
 
-    private bool thrusting = false;
-
-    private void Update()
+    private void Awake()
     {
-        SpawnBlock();
+        Instance = this;
 
-        MoveStage();
-
-        Thrust();
-    }
-
-    private void MoveStage()
-    {
-        transform.Translate(currentSpeed * Time.deltaTime * Vector2.right);
-    }
-
-    private void Thrust()
-    {
-        if (thrusting)
+        foreach (var prefab in obstaclePrefabs)
         {
-            Mathf.MoveTowards(currentSpeed, thrustingSpeed, thrustingAcceleration);
-        }
-        else
-        {
-            Mathf.MoveTowards(currentSpeed, normalSpeed, thrustingAcceleration);
+            var pool = new ObjectPool<GameObject>(
+                createFunc: () => Instantiate(prefab),
+                actionOnGet: obj => obj.SetActive(true),
+                actionOnRelease: obj => obj.SetActive(false),
+                actionOnDestroy: obj => Destroy(obj),
+                collectionCheck: false,
+                defaultCapacity: poolSize
+            );
+
+            poolDict[prefab.name] = pool;
         }
     }
 
-    private void SpawnBlock()
+    public GameObject Get(string prefabName, Vector3 position, Transform parent = null)
     {
-        if (Time.time - lastSpawned > spawnTimer)
+        if (!poolDict.ContainsKey(prefabName))
         {
-            lastSpawned = Time.time;
-
+            Debug.LogWarning($"No pool found for: {prefabName}");
+            return null;
         }
+
+        GameObject obj = poolDict[prefabName].Get();
+        obj.transform.SetParent(parent);
+        obj.transform.position = position;
+        return obj;
     }
 
-    public void ThrustInput(InputAction.CallbackContext ctx)
+    public void Return(string prefabName, GameObject obj)
     {
-        if (ctx.started)
+        if (!poolDict.ContainsKey(prefabName))
         {
-            thrusting = true;
+            Debug.LogWarning($"No pool to return to: {prefabName}");
+            Destroy(obj);
+            return;
         }
 
-        if (ctx.canceled)
-        {
-            thrusting = false;
-        }
+        poolDict[prefabName].Release(obj);
     }
 }
